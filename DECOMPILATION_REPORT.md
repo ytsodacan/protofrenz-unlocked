@@ -15,7 +15,7 @@
 ---
 
 ## 2. Partition Layout (8MB Flash)
-Reconstructed from `partitions.bin` (saved as [`partitions.csv`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/partitions.csv)):
+Reconstructed from `partitions.bin` (saved as [`partitions.csv`](partitions.csv)):
 
 | Partition | Type | Subtype | Flash Offset | Size (Hex) | Size (Bytes) | Description |
 |---|---|---|---|---|---|---|
@@ -31,7 +31,7 @@ Reconstructed from `partitions.bin` (saved as [`partitions.csv`](file:///c:/User
 ## 3. WebUI Frontend Recovery (100% Decompiled)
 The single-page Web Application served on `GET /` was embedded in `ProtoFrenz.bin` at byte offset `0x1d066` as a raw DEFLATE stream. 
 
-We successfully extracted and decompressed the entire frontend into [`control_panel.html`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/control_panel.html) (313,950 bytes, 6,234 lines of code). All HTML markup, responsive CSS stylesheets, and client-side JavaScript logic (including developer comments) are 100% preserved.
+We successfully extracted and decompressed the entire frontend into [`control_panel.html`](control_panel.html) (313,950 bytes, 6,234 lines of code). All HTML markup, responsive CSS stylesheets, and client-side JavaScript logic (including developer comments) are 100% preserved.
 
 ### WebUI Tabs & Features
 1. **Editor (`ed`)**:
@@ -93,9 +93,9 @@ The firmware exposes the following REST API endpoints:
 ---
 
 ## 7. Reconstructed File Inventory in Workspace
-- [`control_panel.html`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/control_panel.html) - The 100% recovered WebUI frontend (HTML/CSS/JS, 313 KB).
-- [`captive_portal.html`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/captive_portal.html) - The captive portal sign-in page.
-- [`partitions.csv`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/partitions.csv) - ESP32 partition table specification.
-- [`webui.h`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/webui.h) - C++ header embedding the WebUI gzipped payload in PROGMEM.
-- [`ProtoFrenz.ino`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/sourcecode/ProtoFrenz.ino) - Reconstructed Arduino firmware source code.
-- [`manifest.json`](file:///c:/Users/synnt/OneDrive/.Antigravity/ProtoFenz/git/manifest.json) - ESP Web Tools flasher manifest.
+- [`control_panel.html`](control_panel.html) - The 100% recovered WebUI frontend (HTML/CSS/JS, 313 KB).
+- [`captive_portal.html`](captive_portal.html) - The captive portal sign-in page.
+- [`partitions.csv`](partitions.csv) - ESP32 partition table specification.
+- [`webui.h`](webui.h) - C++ header embedding the WebUI gzipped payload in PROGMEM.
+- [`ProtoFrenz.ino`](ProtoFrenz.ino) - Reconstructed Arduino firmware source code.
+- [`README.md`](README.md) - Project README.

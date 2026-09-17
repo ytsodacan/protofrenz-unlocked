@@ -18,7 +18,10 @@
 #include <DNSServer.h>
 #include <Preferences.h>
 #include <SPIFFS.h>
+#if __has_include(<NimBLEDevice.h>)
 #include <NimBLEDevice.h>
+#define HAS_NIMBLE 1
+#endif
 #include "esp_bt.h"
 #include "webui.h"
 
