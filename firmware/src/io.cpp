@@ -25,13 +25,23 @@ void begin() {
   pinMode(pins::BUTTON, INPUT);
   pinMode(pins::MIC, INPUT);
   analogReadResolution(12);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttachChannel(pins::FAN, 25000, 8, FAN_CH);
+#else
   ledcSetup(FAN_CH, 25000, 8);
   ledcAttachPin(pins::FAN, FAN_CH);
-  ledcWrite(FAN_CH, 255);  // kick-start, then settle to the configured speed
+#endif
+  setFan(255);  // kick-start, then settle to the configured speed
   delay(200);
 }
 
-void setFan(uint8_t duty) { ledcWrite(FAN_CH, duty); }
+void setFan(uint8_t duty) {
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(pins::FAN, duty);
+#else
+  ledcWrite(FAN_CH, duty);
+#endif
+}
 
 static void sampleMic() {
   uint16_t lo = 4095, hi = 0;

@@ -410,7 +410,7 @@ void setup() {
   activate(cfg.active);
   net::begin();
   if (cfg.bleOn) ble::begin(cfg.devName);
-  Serial.printf("Proot %s ready  heap=%u  ap=%s\n", PROOT_VERSION, ESP.getFreeHeap(), cfg.apName);
+  Serial.printf("Proot %s ready  heap=%u  ap=%s\n", PROOT_VERSION, (unsigned)ESP.getFreeHeap(), cfg.apName);
 }
 
 void loop() {

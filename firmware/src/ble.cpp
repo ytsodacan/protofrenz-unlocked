@@ -1,4 +1,5 @@
 #include <NimBLEDevice.h>
+#include <atomic>
 #include <vector>
 #include "comms.h"
 
@@ -16,7 +17,7 @@ static NimBLECharacteristic* tx = nullptr;
 static std::vector<uint8_t> rxBuf;
 static bool rxBinary = false;
 static volatile uint16_t mtu = 23;
-static volatile uint8_t links = 0;
+static std::atomic<uint8_t> links{0};
 
 class ServerCb : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer* s, ble_gap_conn_desc* d) override {
