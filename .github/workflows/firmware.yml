@@ -1,0 +1,53 @@
+name: Firmware
+
+on:
+  push:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+  pull_request:
+    paths: ["firmware/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Build
+        # CI builds ship the default Proot face set; ProtoFrenz faces are a local-only import.
+        run: |
+          pip install platformio esptool
+          pio run -d firmware
+
+      - name: Merge full flash image
+        run: |
+          B=firmware/.pio/build/protofrenz
+          APP0=$(find ~/.platformio/packages/framework-arduinoespressif32 -name boot_app0.bin | head -1)
+          esptool.py --chip esp32 merge_bin -o proot-full.bin --flash_size 8MB \
+            0x1000 $B/bootloader.bin 0x8000 $B/partitions.bin 0xe000 $APP0 0x10000 $B/firmware.bin
+          cp $B/firmware.bin proot-ota.bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proot-firmware
+          path: |
+            proot-full.bin
+            proot-ota.bin
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            proot-full.bin
+            proot-ota.bin

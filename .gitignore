@@ -1,0 +1,8 @@
+firmware/.pio/
+firmware/src/generated/
+firmware/src/faces_vendor.h
+legacy/
+app/build/
+app/*.xcodeproj/
+.DS_Store
+firmware/.vscode/
