@@ -20,8 +20,10 @@ const char* current();
 Layout draw(Canvas& c);  // advances by wall-clock; returns how to present
 
 // Chunked upload, used by WebSocket and BLE alike.
-bool uploadBegin(const char* name, uint32_t size);
+// raw = store as /<name> without animation checks (used for the face pack).
+bool uploadBegin(const char* name, uint32_t size, bool raw = false);
 bool uploadChunk(uint32_t offset, const uint8_t* data, size_t len);
 bool uploadEnd();
 uint32_t uploadReceived();
+bool uploadWasRaw();
 }  // namespace anim

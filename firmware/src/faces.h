@@ -5,7 +5,10 @@
 namespace faces {
 enum Part : uint8_t { Eye, Nose, Mouth };
 
-bool vendor();  // true when built with tools/import_protofrenz_faces.py output
+bool vendor();    // true when built with tools/import_protofrenz_faces.py output
+bool loadPack();  // loads /faces uploaded by the app; it then replaces the built-in set
+void removePack();
+bool hasPack();
 uint8_t count(Part p);
 const char* name(Part p, uint8_t i);
 void bits(Part p, uint8_t i, uint8_t* out);  // canonical bytes, size per part

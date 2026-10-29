@@ -121,7 +121,7 @@ struct ConnectView: View {
     }
 
     private func heroFrame(_ t: Double) -> PixelBuffer {
-        let lib = store.faces.eyes.isEmpty ? FaceLibrary.demo : store.faces
+        let lib = !store.faces.eyes.isEmpty ? store.faces : store.importedFaces.map(FaceLibrary.init) ?? FaceLibrary.demo
         var e = DemoData.state.expr[0]
         e.speed = 3
         return FaceRenderer.render(e, parts: lib.parts(for: e), t: t, blink: heroBlink.value(at: t)).visor(mirror: true)

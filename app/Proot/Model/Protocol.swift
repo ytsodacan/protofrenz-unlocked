@@ -72,6 +72,7 @@ struct NetInfo: Codable, Equatable {
 struct DeviceState: Codable, Equatable {
     var version: String
     var vendorFaces: Bool
+    var facePack: Bool?
     var mode: String
     var active: Int
     var boop: Bool

@@ -10,6 +10,8 @@ Open replacement firmware and an iOS app for the **ProtoFrenz HUB75 controller**
 - Fan, NeoPixel cheeks, boop sensor, button and microphone all supported. No boot splash: the face fades straight in.
 - Your old ProtoFrenz settings (expression names, presets, colors, custom drawing, fan speed, name) are imported automatically on first boot.
 
+**Your ProtoFrenz faces, from the app:** Settings → Face library → *Get ProtoFrenz faces*. The app downloads the official v3.0.13 firmware from ProtoFrenz's public GitHub release, extracts all 52 eyes, 33 mouths and 24 noses on your phone, and sends them to the visor as a face pack. The visor loads the pack at boot and uses it instead of its built-in faces, so your old expressions show their original presets. The art never goes into this repo.
+
 There's no web page in the firmware. The app is the whole interface, which keeps the firmware small.
 
 ```
@@ -24,7 +26,7 @@ legacy/     (git-ignored) the old decompiled files
 > Back up your current firmware first so you can always go back to stock:
 > `esptool.py --baud 115200 read_flash 0 0x800000 protofrenz-backup.bin`
 
-**Option A: build it yourself (recommended, includes the original ProtoFrenz faces)**
+**Option A: build it yourself (bakes the ProtoFrenz faces into the firmware)**
 
 ```bash
 pip install platformio
@@ -32,7 +34,7 @@ python3 tools/import_protofrenz_faces.py      # downloads the official v3.0.13 i
 cd firmware && pio run -t upload
 ```
 
-`import_protofrenz_faces.py` writes `firmware/src/faces_vendor.h`, which is git-ignored. That art belongs to ProtoFrenz, so keep it out of the repo. Without it, the firmware uses Proot's own face set (`tools/gen_default_faces.py`).
+`import_protofrenz_faces.py` writes `firmware/src/faces_vendor.h`, which is git-ignored. That art belongs to ProtoFrenz, so keep it out of the repo. Without it, the firmware uses Proot's own face set (`tools/gen_default_faces.py`). Either way you can install the ProtoFrenz faces later from the app.
 
 **Option B: prebuilt.** Every push builds firmware in GitHub Actions (*Actions → Firmware → proot-firmware*):
 
@@ -73,7 +75,9 @@ The app and visor exchange JSON messages plus a few binary messages, over either
 - **BLE**: service `7f3e0001-4a2b-4d7e-9c1a-70726f6f7401`; write to `…0002`, notifications on `…0003`. Each packet starts with a header byte: bit 7 = binary, bit 6 = first packet, bit 5 = last packet.
 - **Wi-Fi**: WebSocket at `ws://192.168.4.1/ws` (or `proot.local`); firmware upload at `POST /api/ota`.
 
-Commands (`{"cmd": …}`): `get`, `faces`, `expr`, `next`, `setExpr`, `custom`, `set`, `mode`, `text`, `anim`, `files`, `rm`, `upStart`/`upEnd`, `game`, `key`, `meter`, `applyWifi`, `save`, `reboot`, `factoryReset`, `resetStats`. Add `"id"` to get an `ack`.
+Commands (`{"cmd": …}`): `get`, `faces`, `expr`, `next`, `setExpr`, `custom`, `set`, `mode`, `text`, `anim`, `files`, `rm`, `upStart`/`upEnd` (`"kind":"faces"` for a face pack), `removeFacePack`, `game`, `key`, `meter`, `applyWifi`, `save`, `reboot`, `factoryReset`, `resetStats`. Add `"id"` to get an `ack`.
 Binary: `0x01` live frame `[fmt][w][h][pixels]` (fmt bit0 = RGB332, else RGB565 LE; bit7 = mirror), `0x02` upload chunk `[u32 offset][data]`.
+
+Face packs (`/faces`): `"PFP1"`, u8 eye/nose/mouth counts, u8 0, then each part as a 16-byte name followed by its bitmap (eye 16 B, nose 8 B, mouth 40 B; row-major, MSB = left pixel).
 
 Animations are stored as `.pfa`: `"PFA1"`, u16 width (64 or 128), u16 height (32), u16 frame count, u8 flags (bit0 mirror), u8 0, then each frame as a u16 delay in ms followed by RGB565 pixels.

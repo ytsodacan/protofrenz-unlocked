@@ -9,6 +9,7 @@ struct FacesView: View {
     var body: some View {
         if let s = store.state {
             VStack(spacing: 0) {
+                FaceLibraryBanner()
                 SectionHeader(title: "Expressions")
                 TimelineView(.animation(minimumInterval: 1 / 12)) { ctx in
                     let t = ctx.date.timeIntervalSinceReferenceDate

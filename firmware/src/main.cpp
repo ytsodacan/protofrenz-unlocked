@@ -42,6 +42,7 @@ static String stateJson() {
   d["t"] = "state";
   d["version"] = PROOT_VERSION;
   d["vendorFaces"] = faces::vendor();
+  d["facePack"] = faces::hasPack();
   d["mode"] = MODE_NAMES[(int)mode];
   d["active"] = cfg.active;
   d["boop"] = millis() < boopUntil;
@@ -261,11 +262,22 @@ static void handleJson(const comms::Msg& m) {
   } else if (!strcmp(cmd, "rm")) {
     out["ok"] = anim::remove(in["name"] | "");
   } else if (!strcmp(cmd, "upStart")) {
-    out["ok"] = anim::uploadBegin(in["name"] | "anim", in["size"] | 0);
+    bool pack = !strcmp(in["kind"] | "", "faces");
+    out["ok"] = anim::uploadBegin(pack ? "faces" : (in["name"] | "anim"), in["size"] | 0, pack);
     sendAck = true;
   } else if (!strcmp(cmd, "upEnd")) {
-    out["ok"] = anim::uploadEnd();
+    bool ok = anim::uploadEnd();
+    if (ok && anim::uploadWasRaw()) {
+      ok = faces::loadPack();
+      if (ok) comms::broadcast(facesJson());
+      markDirty();
+    }
+    out["ok"] = ok;
     sendAck = true;
+  } else if (!strcmp(cmd, "removeFacePack")) {
+    faces::removePack();
+    comms::broadcast(facesJson());
+    markDirty();
   } else if (!strcmp(cmd, "game")) {
     int g = games::fromSlug(in["g"] | "");
     if (g >= 0) {
@@ -405,6 +417,7 @@ void setup() {
   applyHardware();
   io::cheeksBegin(cfg.cheekCount);
   if (!anim::begin()) Serial.println("[fs] mount failed");
+  if (faces::loadPack()) Serial.println("[faces] using uploaded face pack");
   randomSeed(esp_random());
   nextBlink = millis() + 1500;
   activate(cfg.active);

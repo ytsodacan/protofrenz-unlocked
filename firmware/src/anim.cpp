@@ -117,8 +117,11 @@ Layout draw(Canvas& c) {
   return layout;
 }
 
-bool uploadBegin(const char* name, uint32_t size) {
+static bool upRaw = false;
+
+bool uploadBegin(const char* name, uint32_t size, bool raw) {
   if (up) up.close();
+  upRaw = raw;
   safeName(name, upName, sizeof(upName));
   if (size > LittleFS.totalBytes() - LittleFS.usedBytes()) return false;
   up = LittleFS.open("/anim/upload.tmp", "w");
@@ -141,6 +144,11 @@ bool uploadEnd() {
     LittleFS.remove("/anim/upload.tmp");
     return false;
   }
+  if (upRaw) {  // non-animation payload (face pack): caller validates it at its final path
+    String dst = String("/") + upName;
+    LittleFS.remove(dst);
+    return LittleFS.rename("/anim/upload.tmp", dst);
+  }
   File f = LittleFS.open("/anim/upload.tmp", "r");
   Header h;
   bool ok = readHeader(f, h) && f.size() == sizeof(Header) + (uint32_t)h.frames * (2 + h.w * h.h * 2);
@@ -156,5 +164,6 @@ bool uploadEnd() {
 }
 
 uint32_t uploadReceived() { return upGot; }
+bool uploadWasRaw() { return upRaw; }
 
 }  // namespace anim

@@ -1,4 +1,5 @@
 #include "faces.h"
+#include <LittleFS.h>
 
 #if __has_include("faces_vendor.h")
 #include "faces_vendor.h"
@@ -19,20 +20,84 @@ static constexpr Place NOSE_AT = {52, 2, NOSE_W, NOSE_H};
 static constexpr Place MOUTH_AT = {2, 18, MOUTH_W, MOUTH_H};
 static constexpr float SCALE = 1.5f;
 
+// Face pack uploaded by the app (/faces): "PFP1", u8 eyes, u8 noses, u8 mouths, u8 0,
+// then for each eye, nose and mouth in turn: char name[16] + canonical bitmap.
+static constexpr const char* PACK_PATH = "/faces";
+static constexpr size_t NAME_LEN = 16;
+static constexpr size_t PART_BYTES[3] = {EYE_BYTES, NOSE_BYTES, MOUTH_BYTES};
+static uint8_t* pack = nullptr;
+static uint8_t packCount[3] = {0, 0, 0};
+static size_t packOffset[3];
+
+static void unloadPack() {
+  free(pack);
+  pack = nullptr;
+  memset(packCount, 0, sizeof(packCount));
+}
+
+bool loadPack() {
+  unloadPack();
+  File f = LittleFS.open(PACK_PATH, "r");
+  if (!f) return false;
+  uint8_t hdr[8];
+  size_t size = f.size();
+  bool ok = f.read(hdr, 8) == 8 && !memcmp(hdr, "PFP1", 4) && hdr[4] && hdr[5] && hdr[6];
+  size_t need = 0;
+  if (ok) {
+    for (int p = 0; p < 3; p++) need += hdr[4 + p] * (NAME_LEN + PART_BYTES[p]);
+    ok = size == 8 + need;
+  }
+  if (ok) {
+    pack = (uint8_t*)malloc(need);
+    ok = pack && f.read(pack, need) == need;
+  }
+  f.close();
+  if (!ok) {
+    unloadPack();
+    LittleFS.remove(PACK_PATH);
+    return false;
+  }
+  size_t off = 0;
+  for (int p = 0; p < 3; p++) {
+    packCount[p] = hdr[4 + p];
+    packOffset[p] = off;
+    off += packCount[p] * (NAME_LEN + PART_BYTES[p]);
+  }
+  return true;
+}
+
+void removePack() {
+  unloadPack();
+  LittleFS.remove(PACK_PATH);
+}
+
+bool hasPack() { return pack != nullptr; }
 bool vendor() { return FACES_VENDOR; }
 
+static const uint8_t* packItem(Part p, uint8_t i) {
+  return pack + packOffset[p] + i * (NAME_LEN + PART_BYTES[p]);
+}
+
 uint8_t count(Part p) {
+  if (pack) return packCount[p];
   return p == Eye ? FACE_EYES_COUNT : p == Nose ? FACE_NOSES_COUNT : FACE_MOUTHS_COUNT;
 }
 
 const char* name(Part p, uint8_t i) {
   i %= count(p);
+  if (pack) {
+    static char buf[NAME_LEN + 1];
+    memcpy(buf, packItem(p, i), NAME_LEN);
+    buf[NAME_LEN] = 0;
+    return buf;
+  }
   return p == Eye ? FACE_EYES_NAMES[i] : p == Nose ? FACE_NOSES_NAMES[i] : FACE_MOUTHS_NAMES[i];
 }
 
 void bits(Part p, uint8_t i, uint8_t* out) {
   i %= count(p);
-  if (p == Eye) memcpy_P(out, FACE_EYES[i], EYE_BYTES);
+  if (pack) memcpy(out, packItem(p, i) + NAME_LEN, PART_BYTES[p]);
+  else if (p == Eye) memcpy_P(out, FACE_EYES[i], EYE_BYTES);
   else if (p == Nose) memcpy_P(out, FACE_NOSES[i], NOSE_BYTES);
   else memcpy_P(out, FACE_MOUTHS[i], MOUTH_BYTES);
 }

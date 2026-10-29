@@ -130,10 +130,11 @@ struct SettingsView: View {
                     stat("Hours", String(format: "%.1f", Double(s.stats.minutes) / 60))
                 }
 
+                FaceLibrarySection()
+
                 SectionHeader(title: "Firmware")
                 RowGroup {
                     Row { Text("Version").frame(maxWidth: .infinity, alignment: .leading); Text(s.version).foregroundStyle(Theme.dim) }
-                    Row { Text("Face set").frame(maxWidth: .infinity, alignment: .leading); Text(s.vendorFaces ? "ProtoFrenz (imported)" : "Proot default").foregroundStyle(Theme.dim) }
                     Row {
                         RowLabel(title: "Update firmware", subtitle: store.isBLE ? "Connect over Wi-Fi to update" : "Pick a Proot firmware .bin")
                         Button("Choose") { otaPicking = true }.buttonStyle(SmallButtonStyle()).disabled(store.isBLE || store.isDemo)

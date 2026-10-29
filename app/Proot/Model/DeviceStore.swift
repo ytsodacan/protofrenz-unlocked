@@ -18,6 +18,9 @@ final class DeviceStore {
     var micLevel: Double = 0
     var lastBoop: Int?
     var toast: String?
+    /// ProtoFrenz presets extracted on this phone (see FaceImporter); nil until imported.
+    var importedFaces: FacesMessage? = FaceImporter.load()
+    var faceImport: FaceImportStatus = .idle
 
     @ObservationIgnored let scanner = BLEScanner()
     @ObservationIgnored private var transport: Transport?
@@ -70,7 +73,7 @@ final class DeviceStore {
         disconnect()
         kind = .demo
         link = .connected
-        faces = FaceLibrary.demo
+        faces = importedFaces.map(FaceLibrary.init) ?? FaceLibrary.demo
         state = DemoData.state
         files = []
         fs = FsInfo(total: 1_500_000, used: 0)
@@ -322,8 +325,8 @@ final class DeviceStore {
         sendBinary(d)
     }
 
-    func upload(name: String, data: Data, progress: @escaping (Double) -> Void) async throws {
-        let start = try await request(["cmd": "upStart", "name": name, "size": data.count])
+    func upload(name: String, data: Data, kind: String = "anim", progress: @escaping (Double) -> Void) async throws {
+        let start = try await request(["cmd": "upStart", "name": name, "kind": kind, "size": data.count])
         guard start["ok"] as? Bool == true else { throw ProotError.device("Not enough space on the visor") }
         let chunk = transport?.maxBinaryChunk ?? 4096
         var off = 0
@@ -351,6 +354,49 @@ final class DeviceStore {
         let end = try await request(["cmd": "upEnd"])
         guard end["ok"] as? Bool == true else { throw ProotError.device("The visor rejected the file") }
         send(["cmd": "files"])
+    }
+
+    // MARK: face library
+
+    /// Downloads the official ProtoFrenz firmware, extracts its presets on the phone,
+    /// keeps them, and installs them on the connected visor.
+    func importProtoFrenzFaces() async {
+        faceImport = .downloading
+        do {
+            importedFaces = try await FaceImporter.download()
+            if isConnected { try await installFacePack() } else { faceImport = .idle }
+            flash("ProtoFrenz faces imported")
+        } catch {
+            faceImport = .failed(error.localizedDescription)
+        }
+    }
+
+    func installFacePack() async throws {
+        guard let f = importedFaces else { return }
+        if isDemo {
+            faces = FaceLibrary(f)
+            state?.facePack = true
+            faceImport = .idle
+            return
+        }
+        faceImport = .sending(0)
+        defer { if case .sending = faceImport { faceImport = .idle } }
+        try await upload(name: "faces", data: FaceImporter.pack(f), kind: "faces") { p in self.faceImport = .sending(p) }
+        send(["cmd": "get"])
+    }
+
+    func removeFacePack() {
+        if isDemo {
+            faces = FaceLibrary.demo
+            state?.facePack = false
+            return
+        }
+        send(["cmd": "removeFacePack"])
+    }
+
+    func forgetImportedFaces() {
+        FaceImporter.forget()
+        importedFaces = nil
     }
 
     func otaUpdate(fileURL: URL, progress: @escaping (Double) -> Void) async throws {
@@ -413,6 +459,13 @@ final class DeviceStore {
         uploadWaiter?.resume(returning: u.got)
         uploadWaiter = nil
     }
+}
+
+enum FaceImportStatus: Equatable {
+    case idle
+    case downloading
+    case sending(Double)
+    case failed(String)
 }
 
 enum ProotError: LocalizedError {
