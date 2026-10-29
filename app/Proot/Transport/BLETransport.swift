@@ -58,6 +58,23 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         return t
     }
 
+    /// Retries the same transport (no cancel/connect race on the peripheral).
+    func reconnect(_ t: BLETransport) {
+        guard active === t, poweredOn else { return }
+        t.reset()
+        central.connect(t.peripheral, options: nil)
+    }
+
+    fileprivate func release(_ t: BLETransport) {
+        if active === t { active = nil }
+        central.cancelPeripheralConnection(t.peripheral)
+    }
+
+    private func forActive(_ p: CBPeripheral) -> BLETransport? {
+        guard let a = active, a.peripheral.identifier == p.identifier else { return nil }
+        return a
+    }
+
     private func upsert(_ v: DiscoveredVisor) {
         if let i = visors.firstIndex(where: { $0.id == v.id }) { visors[i] = v } else { visors.append(v) }
         visors.sort { $0.rssi > $1.rssi }
@@ -76,14 +93,14 @@ final class BLEScanner: NSObject, ObservableObject, CBCentralManagerDelegate {
         upsert(DiscoveredVisor(id: p.identifier, name: name, rssi: rssi.intValue))
     }
 
-    func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) { active?.didConnect() }
+    func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) { forActive(p)?.didConnect() }
 
     func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
-        active?.onState?(.failed(error?.localizedDescription ?? "Could not connect"))
+        forActive(p)?.onState?(.failed(error?.localizedDescription ?? "Could not connect"))
     }
 
     func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
-        active?.onState?(.failed("Disconnected"))
+        forActive(p)?.onState?(.failed("Connection lost, reconnecting…"))
     }
 }
 
@@ -93,7 +110,7 @@ final class BLETransport: NSObject, Transport, CBPeripheralDelegate {
     let isBLE = true
     let maxBinaryChunk = 2048
 
-    private let peripheral: CBPeripheral
+    let peripheral: CBPeripheral
     private weak var scanner: BLEScanner?
     private var rx: CBCharacteristic?
     private var inbox = Data()
@@ -108,7 +125,17 @@ final class BLETransport: NSObject, Transport, CBPeripheralDelegate {
         DispatchQueue.main.async { self.onState?(.connecting) }
     }
 
-    fileprivate func didConnect() { peripheral.discoverServices([ProotUUID.service]) }
+    fileprivate func didConnect() {
+        peripheral.delegate = self
+        peripheral.discoverServices([ProotUUID.service])
+    }
+
+    func reset() {
+        rx = nil
+        inbox.removeAll()
+        outbox.removeAll()
+        onState?(.connecting)
+    }
 
     func peripheral(_ p: CBPeripheral, didDiscoverServices error: Error?) {
         guard let s = p.services?.first(where: { $0.uuid == ProotUUID.service }) else {
@@ -169,6 +196,6 @@ final class BLETransport: NSObject, Transport, CBPeripheralDelegate {
 
     func close() {
         outbox.removeAll()
-        scanner?.central.cancelPeripheralConnection(peripheral)
+        scanner?.release(self)
     }
 }

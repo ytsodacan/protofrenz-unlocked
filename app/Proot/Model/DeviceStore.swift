@@ -51,6 +51,10 @@ final class DeviceStore {
     }
 
     func connectBLE(_ id: UUID) {
+        if case .ble(let cur) = kind, cur == id, let b = transport as? BLETransport {
+            scanner.reconnect(b)  // already ours: retry in place
+            return
+        }
         disconnect()
         guard let t = scanner.connect(id) else {
             link = .failed("Visor not found")
@@ -106,10 +110,16 @@ final class DeviceStore {
                     self.send(["cmd": "get"])
                     self.send(["cmd": "faces"])
                     self.send(["cmd": "files"])
-                } else if case .failed = s, case .ble(let id) = self.kind {
+                    // A link that never delivers state is as good as down.
+                    try? await Task.sleep(for: .seconds(8))
+                    if self.transport === t, self.state == nil, self.link == .connected {
+                        self.link = .failed("The visor didn't answer. Retrying…")
+                        self.send(["cmd": "get"])
+                    }
+                } else if case .failed = s, let b = t as? BLETransport {
                     // Out of range or visor rebooting: keep trying in the background.
                     try? await Task.sleep(for: .seconds(2))
-                    if self.transport === t { self.connectBLE(id) }
+                    if self.transport === t { self.scanner.reconnect(b) }
                 }
             }
         }

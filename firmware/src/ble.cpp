@@ -18,18 +18,42 @@ static std::vector<uint8_t> rxBuf;
 static bool rxBinary = false;
 static volatile uint16_t mtu = 23;
 static std::atomic<uint8_t> links{0};
+// Connections subscribed to TX notifications (BLE_HS_CONN_HANDLE_NONE = free slot).
+static volatile uint16_t subs[2] = {BLE_HS_CONN_HANDLE_NONE, BLE_HS_CONN_HANDLE_NONE};
+
+static void setSub(uint16_t conn, bool on) {
+  for (auto& s : subs)
+    if (s == conn) s = BLE_HS_CONN_HANDLE_NONE;
+  if (!on) return;
+  for (auto& s : subs)
+    if (s == BLE_HS_CONN_HANDLE_NONE) {
+      s = conn;
+      return;
+    }
+}
 
 class ServerCb : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer* s, ble_gap_conn_desc* d) override {
     links++;
-    s->updateConnParams(d->conn_handle, 6, 12, 0, 400);
+    Serial.printf("[ble] connected, heap=%u\n", (unsigned)ESP.getFreeHeap());
+    // Within Apple's accessory guidelines: 15-30 ms interval, 4 s supervision timeout.
+    s->updateConnParams(d->conn_handle, 12, 24, 0, 400);
     NimBLEDevice::startAdvertising();  // allow a second device (phone + tablet)
   }
-  void onDisconnect(NimBLEServer*) override {
+  void onDisconnect(NimBLEServer*, ble_gap_conn_desc* d) override {
     if (links) links--;
+    setSub(d->conn_handle, false);
+    Serial.printf("[ble] disconnected, heap=%u\n", (unsigned)ESP.getFreeHeap());
     mtu = 23;
   }
-  void onMTUChange(uint16_t m, ble_gap_conn_desc*) override { mtu = m; }
+  void onMTUChange(uint16_t m, ble_gap_conn_desc*) override {
+    mtu = m;
+    Serial.printf("[ble] mtu %u\n", m);
+  }
+};
+
+class TxCb : public NimBLECharacteristicCallbacks {
+  void onSubscribe(NimBLECharacteristic*, ble_gap_conn_desc* d, uint16_t value) override { setSub(d->conn_handle, value != 0); }
 };
 
 class RxCb : public NimBLECharacteristicCallbacks {
@@ -63,11 +87,13 @@ void begin(const char* name) {
   NimBLECharacteristic* rx = svc->createCharacteristic(PROOT_RX, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   rx->setCallbacks(new RxCb());
   tx = svc->createCharacteristic(PROOT_TX, NIMBLE_PROPERTY::NOTIFY);
+  tx->setCallbacks(new TxCb());
   svc->start();
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
   adv->addServiceUUID(PROOT_SVC);
   adv->setScanResponse(true);
   adv->start();
+  Serial.printf("[ble] advertising as %s, heap=%u\n", name, (unsigned)ESP.getFreeHeap());
 }
 
 void stop() {
@@ -80,22 +106,38 @@ void stop() {
 
 bool connected() { return links > 0; }
 
+// Sends one notification, waiting while NimBLE's buffer pool is full instead of
+// dropping the packet (NimBLECharacteristic::notify() ignores that error).
+static bool notifyPacket(uint16_t conn, const uint8_t* data, size_t len) {
+  for (int attempt = 0; attempt < 200; attempt++) {
+    os_mbuf* om = ble_hs_mbuf_from_flat(data, len);
+    if (om) {
+      int rc = ble_gattc_notify_custom(conn, tx->getHandle(), om);  // consumes om
+      if (rc == 0) return true;
+      if (rc != BLE_HS_ENOMEM && rc != BLE_HS_EBUSY) return false;
+    }
+    delay(2);
+  }
+  return false;
+}
+
 void send(const String& json) {
   if (!tx || !links) return;
-  size_t chunk = max(20, (int)mtu - 4);
+  // Small packets fit one mbuf each, so a burst can't exhaust the pool mid-message.
+  size_t chunk = constrain((int)mtu - 4, 20, 200);
   const uint8_t* p = (const uint8_t*)json.c_str();
-  size_t left = json.length(), off = 0;
-  uint8_t pkt[520];
-  while (left || off == 0) {
-    size_t n = min(left, chunk);
-    pkt[0] = (off == 0 ? 0x40 : 0) | (n == left ? 0x20 : 0);
-    memcpy(pkt + 1, p + off, n);
-    tx->setValue(pkt, n + 1);
-    tx->notify();
-    off += n;
-    left -= n;
-    if (left) delay(4);  // give the controller room to drain its buffers
-    if (!n) break;
+  uint8_t pkt[208];
+  for (uint16_t conn : subs) {
+    if (conn == BLE_HS_CONN_HANDLE_NONE) continue;
+    size_t left = json.length(), off = 0;
+    do {
+      size_t n = min(left, chunk);
+      pkt[0] = (off == 0 ? 0x40 : 0) | (n == left ? 0x20 : 0);
+      memcpy(pkt + 1, p + off, n);
+      if (!notifyPacket(conn, pkt, n + 1)) break;
+      off += n;
+      left -= n;
+    } while (left);
   }
 }
 
