@@ -75,7 +75,7 @@ void begin() {
   server.on("/library/test/success.html", HTTP_GET, probeOk);
   server.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest* r) { r->send(204); });
   server.on("/", HTTP_GET, [](AsyncWebServerRequest* r) {
-    r->send(200, "text/plain", "Proot " PROOT_VERSION " - open the Proot app to control this visor.");
+    r->send(200, "text/plain", "protogen firmware " PROOT_VERSION "use the iphone app instead.");
   });
 
   server.on(
